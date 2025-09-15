@@ -63,6 +63,8 @@ func main() {
 	r.Route("/api/v1", func(r chi.Router) {
 		// user
 		r.Post("/users", userHandler.CreateUser)
+		r.Put("/users/{id}", userHandler.UpdateUser)
+		r.Delete("/users/{id}", userHandler.DeleteUser)
 
 		// post
 		r.Post("/posts", posthandler.CreatePost)
