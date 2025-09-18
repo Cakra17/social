@@ -71,7 +71,12 @@ func(h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonBytes, err := json.Marshal(user)
+	res := models.Response{
+		Status: "success",
+		Data: user,
+	}
+
+	jsonBytes, err := json.Marshal(res)
 	if err != nil {
 		log.Println("Failed to encode to json")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -112,7 +117,12 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonBytes, err := json.Marshal(user)
+	res := models.Response{
+		Status: "success",
+		Message: "success to login",
+	}
+
+	jsonBytes, err := json.Marshal(res)
 	if err != nil {
 		log.Println("Failed to encode to json")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -120,7 +130,7 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type","application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(http.StatusOK)
 	w.Write(jsonBytes)
 }
 
@@ -149,8 +159,21 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}	
 
+	res := models.Response{
+		Status: "success",
+		Message: "Data Updated successfully",
+	}
+
+	jsonBytes, err := json.Marshal(res)
+	if err != nil {
+		log.Println("Failed to encode to json")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type","application/json")
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("User updated successfully"))
+	w.Write(jsonBytes)
 }
 
 func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +187,20 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}	
 
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("User deleted successfully"))
+	res := models.Response{
+		Status: "success",
+		Message: "Data deleted successfully",
+	}
+
+	jsonBytes, err := json.Marshal(res)
+	if err != nil {
+		log.Println("Failed to encode to json")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type","application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonBytes)
 }
 
