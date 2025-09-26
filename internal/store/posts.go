@@ -5,7 +5,6 @@ import (
 	"database/sql"
 
 	"github.com/cakra17/social/internal/models"
-	"github.com/lib/pq"
 )
 
 type PostRepo struct {
@@ -19,19 +18,17 @@ func NewPostRepo(db *sql.DB) PostRepo {
 func (r *PostRepo) Create(ctx context.Context, post *models.Post) error {
 	query := `
 		INSERT INTO posts (
-			id, content, title, 
-			user_id,tags
+			id, caption, media, 
+			user_id
 		) VALUES (
-			$1, $2, $3, $4, $5
+			$1, $2, $3, $4
 		) RETURNING created_at, updated_at
 	`
 	err := r.db.QueryRowContext(
 		ctx, query, 
 		post.ID, 
-		post.Content, 
-		post.Title, 
+		post.Media, 
 		post.UserID,
-		pq.Array(post.Tags),
 	).Scan(
 		&post.CreatedAt,
 		&post.UpdatedAt,
