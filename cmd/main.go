@@ -68,6 +68,8 @@ func main() {
 
 		// post
 		r.Post("/posts", posthandler.CreatePost)
+		r.Put("/posts/{id}", posthandler.UpdatePost)
+		r.Delete("/posts/{id}", posthandler.DeletePost)
 	})
 
 	ctx := context.Background()

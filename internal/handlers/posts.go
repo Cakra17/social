@@ -3,6 +3,7 @@ package handlers
 import (
 	// "encoding/json"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -67,7 +68,78 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	res := models.Response{
+		Status: "success",
+		Message: "Post Created successfully",
+	}
+
+	jsonBytes, err := json.Marshal(&res)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	w.Write(jsonBytes)
 } 
+
+func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	caption := r.FormValue("caption")
+	media := r.FormValue("media")
+
+	post := &models.Post{
+		ID: id,
+		Caption: caption,
+		Media: media,
+	}
+
+	err := h.postRepo.Update(r.Context(), post)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	res := models.Response{
+		Status: "success",
+		Message: "Post updated successfully",
+	}
+
+	jsonBytes, err := json.Marshal(res)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonBytes)
+}
+
+func (h *PostHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	err := h.postRepo.Delete(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	res := models.Response{
+		Status: "success",
+		Message: "Data deleted successfully",
+	}
+
+	jsonBytes, err := json.Marshal(&res)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonBytes)
+}
