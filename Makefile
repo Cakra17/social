@@ -9,5 +9,8 @@ build-win:
 deps:
 	go mod tidy
 
+create-migrate:
+	migrate create -ext sql -seq -dir db/migrations create_new_table
+
 clean:
 	rm -rf	build/$(BINARY_NAME).exe
