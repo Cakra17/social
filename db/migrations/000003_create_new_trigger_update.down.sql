@@ -1,0 +1,1 @@
+DROP TRIGGER IF EXISTS posts_updated_at_trigger ON posts;
