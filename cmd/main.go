@@ -59,6 +59,8 @@ func main() {
 	posthandler := handlers.NewPostHandler(handlers.PostHandlerConfig{
 		PostRepo: postRepo,
 	})
+
+	posthandler.Init()
 	// routing
 	r.Route("/api/v1", func(r chi.Router) {
 		// user

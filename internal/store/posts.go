@@ -27,6 +27,7 @@ func (r *PostRepo) Create(ctx context.Context, post *models.Post) error {
 	err := r.db.QueryRowContext(
 		ctx, query, 
 		post.ID, 
+		post.Caption,
 		post.Media, 
 		post.UserID,
 	).Scan(
@@ -39,6 +40,21 @@ func (r *PostRepo) Create(ctx context.Context, post *models.Post) error {
 	}
 
 	return nil
+}
+
+func (r *PostRepo) GetPhoto(ctx context.Context, id string) (string, error) {
+	var filepath string
+
+	query := `
+		SELECT media from posts id = $1
+	`
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&filepath)
+	
+	if err != nil {
+		return "", err
+	}
+
+	return filepath, nil
 }
 
 func (r *PostRepo) Update(ctx context.Context, post *models.Post) error {
