@@ -46,7 +46,7 @@ func (r *PostRepo) GetPhoto(ctx context.Context, id string) (string, error) {
 	var filepath string
 
 	query := `
-		SELECT media from posts id = $1
+		SELECT media FROM posts WHERE id = $1
 	`
 	err := r.db.QueryRowContext(ctx, query, id).Scan(&filepath)
 	

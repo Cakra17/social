@@ -156,6 +156,7 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	caption := r.FormValue("caption")
+	userID := r.FormValue("userID")
 
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadSize)
 	if err := r.ParseMultipartForm(MaxUploadSize); err != nil {
@@ -164,6 +165,7 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	media, header, err := r.FormFile("media")
 	if err != nil {
+		log.Println(err)
 		http.Error(w, "Failed retrieving data", http.StatusInternalServerError)
 		return
 	}
@@ -174,35 +176,38 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "File tyoe not allowed", http.StatusBadRequest)
 	}
 
-	filename := generateUniqueFilename(header.Filename)
-	filepath := filepath.Join(UploadDir, filename)
-
-	err = uploadPhoto(filepath, media)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	newFilename := generateUniqueFilename(header.Filename)
+	newFilepath := filepath.Join(UploadDir, newFilename)
 
 	ctx := r.Context()
-	filepath, err = h.postRepo.GetPhoto(ctx, id)
+	oldFilename, err := h.postRepo.GetPhoto(ctx, id)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "Post is not available", http.StatusBadRequest)
 		return
 	}
 
-	if err := deletePhoto(filepath); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	oldFilepath := filepath.Join(UploadDir, oldFilename)
 
 	post := &models.Post{
 		ID: id,
 		Caption: caption,
-		Media: filepath,
+		Media: newFilename,
+		UserID: userID,
 	}
 
-	err = h.postRepo.Update(r.Context(), post)
+	err = h.postRepo.Update(ctx, post)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := deletePhoto(oldFilepath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = uploadPhoto(newFilepath, media)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -229,7 +234,7 @@ func (h *PostHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	filepath, err := h.postRepo.GetPhoto(ctx, id)
+	filename, err := h.postRepo.GetPhoto(ctx, id)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "Post is not available", http.StatusBadRequest)
@@ -241,6 +246,8 @@ func (h *PostHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	filepath := filepath.Join(UploadDir, filename)
 
 	if err := deletePhoto(filepath); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
