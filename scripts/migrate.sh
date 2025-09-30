@@ -1,0 +1,1 @@
+migrate -verbose -path=./db/migrations -database postgres://admin:adminsecret@localhost:5432/social?sslmode=disable up
