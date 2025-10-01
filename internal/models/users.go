@@ -23,6 +23,10 @@ type LoginPayload struct {
 	Password  string			`json:"password" validate:"required,min=8,max=30"`
 }
 
+type AuthResponse struct {
+	AccessToken string `json:"access_token"`
+}
+
 type UpdateUserPayload struct {
 	Username  string			`json:"username" validate:"required"`
 	Email			string			`json:"email" validate:"required,email,max=255"`

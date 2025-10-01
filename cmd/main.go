@@ -12,6 +12,7 @@ import (
 
 	"github.com/cakra17/social/internal/handlers"
 	"github.com/cakra17/social/internal/store"
+	"github.com/cakra17/social/pkg/jwt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
@@ -47,6 +48,8 @@ func main() {
 		DB_MaxConnIdletime: 15 * time.Minute,
 	})
 
+	jwtAuthenticator := jwt.NewJWTAuthenticator("mysecret")
+
 	// repository
 	userRepo := store.NewUserRepo(db)
 	postRepo := store.NewPostRepo(db)
@@ -54,6 +57,7 @@ func main() {
 	// handler
 	userHandler := handlers.NewUserHandler(handlers.UserHandlerConfig{
 		UserRepo: userRepo,
+		JWTAuthenticator: jwtAuthenticator,
 	})
 
 	posthandler := handlers.NewPostHandler(handlers.PostHandlerConfig{
@@ -63,15 +67,26 @@ func main() {
 	posthandler.Init()
 	// routing
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Post("/login", userHandler.Authenticate)
 		// user
-		r.Post("/users", userHandler.CreateUser)
-		r.Put("/users/{id}", userHandler.UpdateUser)
-		r.Delete("/users/{id}", userHandler.DeleteUser)
+		r.Route("/users", func(r chi.Router) {
+			r.Post("/", userHandler.CreateUser)
+
+			r.Group(func(r chi.Router) {
+				r.Use(jwtAuthenticator.JWTMiddleware)
+				r.Put("/{id}", userHandler.UpdateUser)
+				r.Delete("/{id}", userHandler.DeleteUser)
+			})
+		})
+		
 
 		// post
-		r.Post("/posts", posthandler.CreatePost)
-		r.Put("/posts/{id}", posthandler.UpdatePost)
-		r.Delete("/posts/{id}", posthandler.DeletePost)
+		r.Route("/posts", func(r chi.Router) {
+			r.Use(jwtAuthenticator.JWTMiddleware)
+			r.Post("/", posthandler.CreatePost)
+			r.Put("/{id}", posthandler.UpdatePost)
+			r.Delete("/{id}", posthandler.DeletePost)
+		})
 	})
 
 	ctx := context.Background()

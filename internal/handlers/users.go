@@ -4,25 +4,30 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/cakra17/social/internal/models"
 	"github.com/cakra17/social/internal/store"
 	"github.com/cakra17/social/internal/utils"
+	"github.com/cakra17/social/pkg/jwt"
 	"github.com/cakra17/social/pkg/validation"
 	"github.com/google/uuid"
 )
 
 type UserHandler struct {
 	userRepo store.UserRepo
+	jwtAuthenticator *jwt.JWTAuthenticator
 }
 
 type UserHandlerConfig struct {
 	UserRepo store.UserRepo
+	JWTAuthenticator *jwt.JWTAuthenticator
 }
 
 func NewUserHandler(cfg UserHandlerConfig) UserHandler {
 	return UserHandler{
 		userRepo: cfg.UserRepo,
+		jwtAuthenticator: cfg.JWTAuthenticator,
 	}
 }
 
@@ -117,9 +122,22 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	token, err := h.jwtAuthenticator.GenerateToken(jwt.JWTUser{
+		ID: user.ID,
+		Email: user.Email,
+	}, 5 * time.Hour)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	res := models.Response{
 		Status: "success",
 		Message: "success to login",
+		Data: models.AuthResponse{
+			AccessToken: token,
+		},
 	}
 
 	jsonBytes, err := json.Marshal(res)
