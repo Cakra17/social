@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -10,6 +11,10 @@ type User struct {
 	Email			string			`json:"email"`
 	Password  string			`json:"-"`
 	CreatedAt *time.Time	`json:"created_at"`
+}
+
+func (u User) MarshalBinary() ([]byte, error) {
+	return json.Marshal(u)
 }
 
 type RegisterPayload struct {

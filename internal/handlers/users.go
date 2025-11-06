@@ -12,21 +12,25 @@ import (
 	"github.com/cakra17/social/pkg/jwt"
 	"github.com/cakra17/social/pkg/validation"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type UserHandler struct {
 	userRepo store.UserRepo
+	redis *redis.Client
 	jwtAuthenticator *jwt.JWTAuthenticator
 }
 
 type UserHandlerConfig struct {
 	UserRepo store.UserRepo
+	Redis *redis.Client
 	JWTAuthenticator *jwt.JWTAuthenticator
 }
 
 func NewUserHandler(cfg UserHandlerConfig) UserHandler {
 	return UserHandler{
 		userRepo: cfg.UserRepo,
+		redis: cfg.Redis,
 		jwtAuthenticator: cfg.JWTAuthenticator,
 	}
 }
@@ -107,14 +111,16 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "The payload is not valid", http.StatusInternalServerError)
 		return
 	}
-
 	ctx := r.Context()
+
 	user, err := h.userRepo.GetUserByEmail(ctx, payload.Email)
 	if err != nil {
 		log.Println(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	h.redis.Set(ctx, user.ID, user, 30 * time.Second)
 
 	if ok := utils.ComparePassword(payload.Password, user.Password); !ok {
 		log.Println(err)
@@ -125,7 +131,7 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	token, err := h.jwtAuthenticator.GenerateToken(jwt.JWTUser{
 		ID: user.ID,
 		Email: user.Email,
-	}, 5 * time.Hour)
+	})
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -148,6 +154,52 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type","application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonBytes)
+}
+
+func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+	var user *models.User
+	
+	ctx := r.Context()
+	claims, ok := h.jwtAuthenticator.GetClaims(ctx)
+	if !ok {
+		http.Error(w, "User claims not found", http.StatusInternalServerError)
+		return
+	}
+
+	userID, _ := claims["userId"].(string)
+
+	s, err := h.redis.Get(ctx, userID).Result()
+	if err != nil {
+		user, err = h.userRepo.GetUserById(ctx, userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		err :=h.redis.Set(ctx, userID, user, time.Minute).Err()
+		if err != nil {
+			log.Printf("Failed to save in redis: %v", err)
+		}
+	} else {
+		if err := json.Unmarshal([]byte(s), &user); err != nil {
+			return
+		}
+	}
+
+	res := models.Response{
+		Status: "success",
+		Data: user,
+	}
+
+	jsonBytes, err := json.Marshal(&res)
+	if err != nil {
+		log.Println("Failed to encode to json")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonBytes)
 }

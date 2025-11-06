@@ -61,7 +61,6 @@ func (r *UserRepo) GetUserById(ctx context.Context, id string) (*models.User, er
 		&user.ID,
 		&user.Username,
 		&user.Email,
-		&user.Password,
 		&user.CreatedAt,
 	)
 	

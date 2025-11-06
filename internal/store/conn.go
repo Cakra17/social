@@ -1,12 +1,14 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"time"
 
-	_"github.com/lib/pq"
+	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 type DBConfig struct {
@@ -43,4 +45,12 @@ func ConnectDB(cfg DBConfig) *sql.DB {
 
 	log.Println("Connected to database!!")
 	return db
+}
+
+func TestRedis(ctx context.Context,rd *redis.Client) {
+	s, err := rd.Ping(ctx).Result()
+	if err != nil {
+		log.Fatalf("Failed to connect to redis: %v", err)
+	}
+	log.Printf("Conneted to redis!! %s", s)
 }

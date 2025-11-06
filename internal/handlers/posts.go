@@ -47,7 +47,7 @@ func NewPostHandler(cfg PostHandlerConfig) PostHandler {
 func generateUniqueFilename(originalFilename string) string {
 	ext := filepath.Ext(originalFilename)
 	timestamp := time.Now().Unix()
-	hash := sha256.Sum256([]byte(fmt.Sprintf("%s%d", ext, timestamp)))
+	hash := sha256.Sum256(fmt.Appendf(nil, "%s%d", ext, timestamp))
 	hashStr := hex.EncodeToString(hash[:])[:16]
 	return fmt.Sprintf("%d_%s%s", timestamp, hashStr, ext)
 }

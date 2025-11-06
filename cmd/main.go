@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -27,6 +28,8 @@ func main() {
 	r.Use(middleware.Logger)
 
 	r.Use(middleware.Timeout(time.Minute))
+
+	ctx := context.Background()
 
 	server := http.Server{
 		Addr: ":6969",
@@ -48,7 +51,13 @@ func main() {
 		DB_MaxConnIdletime: 15 * time.Minute,
 	})
 
-	jwtAuthenticator := jwt.NewJWTAuthenticator("mysecret")
+	jwtAuthenticator := jwt.NewJWTAuthenticator("mysecret", 5 * time.Hour)
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+		Password: "",
+		DB: 0,
+	})
+	store.TestRedis(ctx, rdb)
 
 	// repository
 	userRepo := store.NewUserRepo(db)
@@ -58,6 +67,7 @@ func main() {
 	userHandler := handlers.NewUserHandler(handlers.UserHandlerConfig{
 		UserRepo: userRepo,
 		JWTAuthenticator: jwtAuthenticator,
+		Redis: rdb,
 	})
 
 	posthandler := handlers.NewPostHandler(handlers.PostHandlerConfig{
@@ -74,6 +84,7 @@ func main() {
 
 			r.Group(func(r chi.Router) {
 				r.Use(jwtAuthenticator.JWTMiddleware)
+				r.Get("/logged", userHandler.GetUser)
 				r.Put("/{id}", userHandler.UpdateUser)
 				r.Delete("/{id}", userHandler.DeleteUser)
 			})
@@ -89,7 +100,7 @@ func main() {
 		})
 	})
 
-	ctx := context.Background()
+	
 	closed := make(chan struct{})
 
 	// gracefully shutdown
