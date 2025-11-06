@@ -12,6 +12,26 @@ services:
       POSTGRES_PASSWORD: adminsecret
     volumes:
       - db-data:/var/lib/postgresql/data
+    networks:
+      - social-net
+  
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    environment:
+      REDIS_HOST: localhost:6379
+      REDIS_PASSWORD: 
+      REDIS_DB: 0
+    networks:
+      - social-net
+    volumes:
+      - redis_data:/data
+
+networks:
+  social-net:
+    driver: bridge
 
 volumes:
   db-data:
+  redis_data:
