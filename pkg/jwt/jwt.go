@@ -3,7 +3,6 @@ package jwt
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -21,23 +20,26 @@ type JWTAuthenticator struct {
 	duration time.Duration
 }
 
-func NewJWTAuthenticator(secret string) *JWTAuthenticator {
+type userClaimsKey struct{}
+
+func NewJWTAuthenticator(secret string, duration time.Duration) *JWTAuthenticator {
 	return &JWTAuthenticator{
 		secret: secret,
+		duration: duration,
 	}
 }
 
-func (ja *JWTAuthenticator) BuildJWTClaims(user JWTUser, duration time.Duration) jwt.MapClaims {
+func (ja *JWTAuthenticator) BuildJWTClaims(user JWTUser) jwt.MapClaims {
 	return jwt.MapClaims{
 		"userId": user.ID,
 		"email": user.Email,
-		"exp": time.Now().Add(duration).Unix(),
+		"exp": time.Now().Add(ja.duration).Unix(),
 		"iat": time.Now().Unix(),
 	}
 }
 
-func (ja *JWTAuthenticator) GenerateToken(user JWTUser, exp time.Duration) (string, error) {
-	claims := ja.BuildJWTClaims(user, exp)
+func (ja *JWTAuthenticator) GenerateToken(user JWTUser) (string, error) {
+	claims := ja.BuildJWTClaims(user)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	tokenStr, err := token.SignedString([]byte(ja.secret))
@@ -64,15 +66,17 @@ func (ja *JWTAuthenticator) JWTMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		authHeader := r.Header.Get("Authorization")
-		log.Println(
-			strings.Contains(authHeader, "Bearer "),
-		)
 		if !strings.Contains(authHeader, "Bearer") {
 			http.Error(w, "Invalid Token", http.StatusUnauthorized)
 			return
 		}
 
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenStr == "" {
+			http.Error(w, "Token missing", http.StatusUnauthorized)
+			return
+		}
+
 		token, err := ja.ValidateToken(tokenStr)
 		if err != nil {
 			http.Error(w, "Bearer token malformed", http.StatusUnauthorized)
@@ -85,8 +89,14 @@ func (ja *JWTAuthenticator) JWTMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(context.Background(), "user", claims)
+		ctx := context.WithValue(context.Background(), userClaimsKey{}, claims)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (ja *JWTAuthenticator) GetClaims(ctx context.Context) (jwt.MapClaims, bool) {
+	val := ctx.Value(userClaimsKey{})
+	claims, ok := val.(jwt.MapClaims)
+	return claims, ok
 }
