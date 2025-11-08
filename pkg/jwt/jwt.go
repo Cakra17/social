@@ -89,7 +89,7 @@ func (ja *JWTAuthenticator) JWTMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(context.Background(), userClaimsKey{}, claims)
+		ctx := context.WithValue(r.Context(), userClaimsKey{}, claims)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
