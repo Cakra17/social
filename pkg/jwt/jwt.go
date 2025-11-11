@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	. "github.com/cakra17/social/internal/utils"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -67,25 +68,26 @@ func (ja *JWTAuthenticator) JWTMiddleware(next http.Handler) http.Handler {
 
 		authHeader := r.Header.Get("Authorization")
 		if !strings.Contains(authHeader, "Bearer") {
-			http.Error(w, "Invalid Token", http.StatusUnauthorized)
+			JsonError(ErrNoTokenProvided, w)
 			return
 		}
 
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenStr == "" {
-			http.Error(w, "Token missing", http.StatusUnauthorized)
+			JsonError(ErrTokenMalformed, w)
 			return
 		}
 
 		token, err := ja.ValidateToken(tokenStr)
 		if err != nil {
-			http.Error(w, "Bearer token malformed", http.StatusUnauthorized)
+			JsonError(ErrTokenExpires, w)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok || !token.Valid {
-			http.Error(w, "Bearer token not contains user info", http.StatusUnauthorized)
+			ne := CreateNewError(http.StatusUnauthorized, "Bearer token not contains user info")
+			JsonError(ne, w)
 			return
 		}
 
