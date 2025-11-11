@@ -8,7 +8,7 @@ import (
 
 	"github.com/cakra17/social/internal/models"
 	"github.com/cakra17/social/internal/store"
-	"github.com/cakra17/social/internal/utils"
+	. "github.com/cakra17/social/internal/utils"
 	"github.com/cakra17/social/pkg/jwt"
 	"github.com/cakra17/social/pkg/validation"
 	"github.com/google/uuid"
@@ -40,43 +40,50 @@ func(h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		JsonError(ErrPayloadMalformed, w)
 		return
 	}
 
 	if err := validation.Validate(&payload); err != nil {
 		log.Print(err)
-		http.Error(w, "The payload is not valid", http.StatusInternalServerError)
+		JsonError(ErrInvalidPayload, w)
+		return
+	}
+
+	ctx := r.Context()
+
+	user, _ := h.userRepo.GetUserByEmail(ctx, payload.Email)
+	if user != nil {
+    log.Println("Credentials already used")
+		JsonError(ErrCredentialExist, w)
 		return
 	}
 
 	id, err := uuid.NewV7()
 	if err != nil {
 		log.Println("Failed to generate id")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		JsonError(ErrFailedToCreateUser, w)
 		return
 	}
 
-	hashedPassword, err := utils.HashPassword(payload.Password)
+	hashedPassword, err := HashPassword(payload.Password)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		JsonError(ErrFailedToCreateUser,w)
 		return
 	}
 
-	user := &models.User{
+	user = &models.User{
 		ID: id.String(),
 		Username: payload.Username,
 		Email: payload.Email,
 		Password: hashedPassword,
 	}
-
-	ctx := r.Context()
-
+	
 	err = h.userRepo.CreateUser(ctx, user)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println(err.Error())
+		JsonError(ErrFailedToCreateUser, w)
 		return
 	}
 
@@ -88,7 +95,6 @@ func(h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	jsonBytes, err := json.Marshal(res)
 	if err != nil {
 		log.Println("Failed to encode to json")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -102,29 +108,29 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		JsonError(ErrPayloadMalformed, w)
 		return
 	}
 
 	if err := validation.Validate(&payload); err != nil {
 		log.Print(err)
-		http.Error(w, "The payload is not valid", http.StatusInternalServerError)
+		JsonError(ErrInvalidPayload, w)
 		return
 	}
-	ctx := r.Context()
 
+	ctx := r.Context()
 	user, err := h.userRepo.GetUserByEmail(ctx, payload.Email)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		JsonError(ErrUserNotFound, w)
 		return
 	}
 
 	h.redis.Set(ctx, user.ID, user, 30 * time.Second)
 
-	if ok := utils.ComparePassword(payload.Password, user.Password); !ok {
+	if ok := ComparePassword(payload.Password, user.Password); !ok {
 		log.Println(err)
-		http.Error(w, "Password Incorrect", http.StatusInternalServerError)
+		JsonError(ErrWrongPassword, w)
 		return
 	}
 
@@ -134,7 +140,9 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println(err)
+		ne := CreateNewError(http.StatusInternalServerError, err.Error())
+		JsonError(ne, w)
 		return
 	}
 
@@ -149,7 +157,6 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	jsonBytes, err := json.Marshal(res)
 	if err != nil {
 		log.Println("Failed to encode to json")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -164,7 +171,7 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims, ok := h.jwtAuthenticator.GetClaims(ctx)
 	if !ok {
-		http.Error(w, "User claims not found", http.StatusInternalServerError)
+		JsonError(ErrTokenExpires, w)
 		return
 	}
 
@@ -174,7 +181,7 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		user, err = h.userRepo.GetUserById(ctx, userID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			JsonError(ErrUserNotFound, w)
 			return
 		}
 		err :=h.redis.Set(ctx, userID, user, time.Minute).Err()
@@ -195,7 +202,6 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	jsonBytes, err := json.Marshal(&res)
 	if err != nil {
 		log.Println("Failed to encode to json")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -209,13 +215,13 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		JsonError(ErrPayloadMalformed, w)
 		return
 	}
 
 	if err := validation.Validate(&payload); err != nil {
 		log.Print(err)
-		http.Error(w, "The payload is not valid", http.StatusInternalServerError)
+		JsonError(ErrInvalidPayload, w)
 		return
 	}
 
@@ -225,7 +231,8 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	err := h.userRepo.UpdateUser(ctx, &payload, id)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		ne := CreateNewError(http.StatusInternalServerError, "Failed to update user")
+		JsonError(ne, w)
 		return
 	}	
 
@@ -237,7 +244,6 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	jsonBytes, err := json.Marshal(res)
 	if err != nil {
 		log.Println("Failed to encode to json")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	
@@ -253,7 +259,8 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	err := h.userRepo.Delete(ctx, id)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		ne := CreateNewError(http.StatusInternalServerError, "Failed to delete user")
+		JsonError(ne, w)
 		return
 	}	
 
@@ -265,7 +272,6 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	jsonBytes, err := json.Marshal(res)
 	if err != nil {
 		log.Println("Failed to encode to json")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	

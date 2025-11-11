@@ -16,6 +16,7 @@ import (
 
 	"github.com/cakra17/social/internal/models"
 	"github.com/cakra17/social/internal/store"
+	. "github.com/cakra17/social/internal/utils"
 	"github.com/google/uuid"
 )
 
@@ -89,19 +90,22 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	// limit file photo size
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadSize)
 	if err := r.ParseMultipartForm(MaxUploadSize); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		JsonError(ErrInvalidFileSize, w)
+		return
 	}	
 
 	media, header, err := r.FormFile("media")
 	if err != nil {
-		http.Error(w, "Failed retrieving data", http.StatusInternalServerError)
+		ne := CreateNewError(http.StatusBadRequest, "Failed retrieving data")
+		JsonError(ne, w)
 		return
 	}
 	defer media.Close()
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !allowedType[ext] {
-		http.Error(w, "File tyoe not allowed", http.StatusBadRequest)
+		JsonError(ErrInvalidFileType, w)
+		return
 	}
 
 	filename := generateUniqueFilename(header.Filename)
@@ -109,14 +113,15 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	err = uploadPhoto(filepath, media)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println(err.Error())
+		ne := CreateNewError(http.StatusInternalServerError, "failed to upload image")
+		JsonError(ne, w)
 		return
 	}
 
 	id, err := uuid.NewV7()
 	if err != nil {
-		log.Println("Failed to generate id")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		JsonError(ErrFailedToCreatePost, w)
 		return
 	}
 	
@@ -131,8 +136,8 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	err = h.postRepo.Create(ctx, post)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println(err.Error())
+		JsonError(ErrFailedToCreatePost, w)
 		return
 	}
 
@@ -144,7 +149,7 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	jsonBytes, err := json.Marshal(&res)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+    log.Println("Failed to encode to json")
 		return
 	}
 	
@@ -160,20 +165,23 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadSize)
 	if err := r.ParseMultipartForm(MaxUploadSize); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		JsonError(ErrInvalidFileSize, w)
+		return
 	}	
 
 	media, header, err := r.FormFile("media")
 	if err != nil {
 		log.Println(err)
-		http.Error(w, "Failed retrieving data", http.StatusInternalServerError)
+		ne := CreateNewError(http.StatusBadRequest, "Failed retrieving data")
+		JsonError(ne, w)
 		return
 	}
 	defer media.Close()
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !allowedType[ext] {
-		http.Error(w, "File tyoe not allowed", http.StatusBadRequest)
+		JsonError(ErrInvalidFileType, w)
+		return
 	}
 
 	newFilename := generateUniqueFilename(header.Filename)
@@ -183,7 +191,8 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	oldFilename, err := h.postRepo.GetPhoto(ctx, id)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, "Post is not available", http.StatusBadRequest)
+		ne := CreateNewError(http.StatusNotFound, "Post not found")
+		JsonError(ne, w)
 		return
 	}
 
@@ -196,21 +205,26 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 		UserID: userID,
 	}
 
+	if err := uploadPhoto(newFilepath, media); err != nil {
+		ne := CreateNewError(http.StatusInternalServerError,"Failed upload photo")
+		JsonError(ne, w)
+		return
+	}
+
 	err = h.postRepo.Update(ctx, post)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		deletePhoto(newFilepath)
+
+		log.Println(err.Error())
+		ne := CreateNewError(http.StatusInternalServerError, "Failed to update post")
+		JsonError(ne, w)
 		return
 	}
 
 	if err := deletePhoto(oldFilepath); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = uploadPhoto(newFilepath, media)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		ne := CreateNewError(http.StatusInternalServerError, "Failed to update post")
+		JsonError(ne, w)
+    return
 	}
 
 	res := models.Response{
@@ -220,7 +234,7 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	jsonBytes, err := json.Marshal(res)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println("Failed to encode to json")
 		return
 	}
 
@@ -237,20 +251,25 @@ func (h *PostHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 	filename, err := h.postRepo.GetPhoto(ctx, id)
 	if err != nil {
 		log.Println(err)
-		http.Error(w, "Post is not available", http.StatusBadRequest)
+		ne := CreateNewError(http.StatusNotFound, "Post not found")
+		JsonError(ne, w)
 		return
 	}
 
 	err = h.postRepo.Delete(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println(err.Error())
+		ne := CreateNewError(http.StatusInternalServerError, "Failed to delete post")
+		JsonError(ne, w)
 		return
 	}
 
 	filepath := filepath.Join(UploadDir, filename)
 
 	if err := deletePhoto(filepath); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println(err.Error())
+		ne := CreateNewError(http.StatusInternalServerError, "Failed to delete post")
+		JsonError(ne, w)
 		return
 	}
 
@@ -261,7 +280,7 @@ func (h *PostHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 
 	jsonBytes, err := json.Marshal(&res)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println("Failed to encode to json")
 		return
 	}
 
