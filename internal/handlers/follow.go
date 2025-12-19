@@ -7,6 +7,7 @@ import (
 
 	"github.com/cakra17/social/internal/models"
 	"github.com/cakra17/social/internal/store"
+	"github.com/cakra17/social/internal/utils"
 	. "github.com/cakra17/social/internal/utils"
 	"github.com/cakra17/social/pkg/jwt"
 	"github.com/cakra17/social/pkg/validation"
@@ -18,12 +19,14 @@ type FollowHandler struct {
 	followRepo store.FollowRepo
 	redis *redis.Client
 	jwtAuthenticator *jwt.JWTAuthenticator
+	logger *utils.Logger
 }
 
 type FollowHandlerConfig struct {
 	FollowRepo store.FollowRepo
 	Redis *redis.Client
 	JWTAuthenticator *jwt.JWTAuthenticator
+	Logger *utils.Logger
 }
 
 func NewFollowHandler(cfg FollowHandlerConfig) FollowHandler {
@@ -31,6 +34,7 @@ func NewFollowHandler(cfg FollowHandlerConfig) FollowHandler {
 		followRepo: cfg.FollowRepo,
 		redis: cfg.Redis,
 		jwtAuthenticator: cfg.JWTAuthenticator,
+		logger: cfg.Logger,
 	}
 }
 
@@ -70,7 +74,7 @@ func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := models.Response{
-		Status: "success",
+		Success: true,
 		Message: "started to follow",
 	}
 
@@ -103,7 +107,7 @@ func (h *FollowHandler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := models.Response {
-		Status: "success",
+		Success: true,
 		Data: followers,
 	}
 
@@ -136,7 +140,7 @@ func (h *FollowHandler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := models.Response {
-		Status: "success",
+		Success: true,
 		Data: following,
 	}
 

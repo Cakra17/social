@@ -7,18 +7,20 @@ import (
 	"time"
 
 	"github.com/cakra17/social/internal/models"
+	"github.com/cakra17/social/internal/utils"
 )
 
 type UserRepo struct {
 	db *sql.DB
+	logger *utils.Logger
 }
 
 const (
 	defaultTimeout = 5 * time.Second
 )
 
-func NewUserRepo(db *sql.DB) UserRepo {
-	return UserRepo{ db: db }
+func NewUserRepo(db *sql.DB, lg *utils.Logger) UserRepo {
+	return UserRepo{ db: db, logger: lg }
 }
 
 func (r *UserRepo) CreateUser(ctx context.Context, user *models.User) error {

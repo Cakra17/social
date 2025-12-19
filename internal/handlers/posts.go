@@ -16,6 +16,7 @@ import (
 
 	"github.com/cakra17/social/internal/models"
 	"github.com/cakra17/social/internal/store"
+	"github.com/cakra17/social/internal/utils"
 	. "github.com/cakra17/social/internal/utils"
 	"github.com/google/uuid"
 )
@@ -33,15 +34,18 @@ var allowedType map[string]bool = map[string]bool{
 
 type PostHandler struct {
 	postRepo store.PostRepo
+	logger *utils.Logger
 }
 
 type PostHandlerConfig struct {
 	PostRepo store.PostRepo
+	Logger *utils.Logger
 }
 
 func NewPostHandler(cfg PostHandlerConfig) PostHandler {
 	return PostHandler{
 		postRepo: cfg.PostRepo,
+		logger: cfg.Logger,
 	}
 }
 
@@ -142,7 +146,7 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := models.Response{
-		Status: "success",
+		Success: true,
 		Message: "Post Created successfully",
 		Data: post,
 	}
@@ -228,7 +232,7 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := models.Response{
-		Status: "success",
+		Success: true,
 		Message: "Post updated successfully",
 	}
 
@@ -274,7 +278,7 @@ func (h *PostHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := models.Response{
-		Status: "success",
+		Success: true,
 		Message: "Data deleted successfully",
 	}
 

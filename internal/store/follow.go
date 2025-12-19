@@ -5,14 +5,16 @@ import (
 	"database/sql"
 
 	"github.com/cakra17/social/internal/models"
+	"github.com/cakra17/social/internal/utils"
 )
 
 type FollowRepo struct {
 	db *sql.DB
+	logger *utils.Logger
 }
 
-func NewFollowRepo(db *sql.DB) FollowRepo {
-	return FollowRepo{ db: db }
+func NewFollowRepo(db *sql.DB, lg *utils.Logger) FollowRepo {
+	return FollowRepo{db: db, logger: lg}
 }
 
 func (r *FollowRepo) Follow(ctx context.Context, f models.Follow) error {

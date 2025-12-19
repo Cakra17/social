@@ -5,14 +5,16 @@ import (
 	"database/sql"
 
 	"github.com/cakra17/social/internal/models"
+	"github.com/cakra17/social/internal/utils"
 )
 
 type PostRepo struct {
 	db *sql.DB
+	logger *utils.Logger
 }
 
-func NewPostRepo(db *sql.DB) PostRepo {
-	return PostRepo{ db: db }
+func NewPostRepo(db *sql.DB, lg *utils.Logger) PostRepo {
+	return PostRepo{ db: db, logger: lg }
 }
 
 func (r *PostRepo) Create(ctx context.Context, post *models.Post) error {
