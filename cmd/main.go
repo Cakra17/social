@@ -12,6 +12,7 @@ import (
 
 	"github.com/cakra17/social/internal/handlers"
 	"github.com/cakra17/social/internal/store"
+	"github.com/cakra17/social/internal/utils"
 	"github.com/cakra17/social/pkg/jwt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -39,7 +40,7 @@ func main() {
 		ReadTimeout: 10 * time.Second,
 		IdleTimeout: time.Minute,
 	}
-	// connection
+
 	db := store.ConnectDB(store.DBConfig{
 		DB_USERNAME: "admin",
 		DB_PASSWORD: "adminsecret",
@@ -52,6 +53,8 @@ func main() {
 		DB_MaxConnIdletime: 15 * time.Minute,
 	})
 
+	logger := utils.NewLogger()
+
 	jwtAuthenticator := jwt.NewJWTAuthenticator("mysecret", 5 * time.Hour)
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
@@ -63,20 +66,22 @@ func main() {
 	})
 	store.TestRedis(ctx, rdb)
 
-	// repository
-	userRepo := store.NewUserRepo(db)
-	postRepo := store.NewPostRepo(db)
-	followRepo := store.NewFollowRepo(db)
+	userRepo := store.NewUserRepo(db, logger)
+	postRepo := store.NewPostRepo(db, logger)
+	followRepo := store.NewFollowRepo(db, logger)
+	likesRepo := store.NewLikesRepo(db, logger)
+	favoriteRepo := store.NewFavoriteRepo(db, logger)
 
-	// handler
 	userHandler := handlers.NewUserHandler(handlers.UserHandlerConfig{
 		UserRepo: userRepo,
 		JWTAuthenticator: jwtAuthenticator,
 		Redis: rdb,
+		Logger: logger,
 	})
 
 	posthandler := handlers.NewPostHandler(handlers.PostHandlerConfig{
 		PostRepo: postRepo,
+		Logger: logger,
 	})
 
 	posthandler.Init()
@@ -85,11 +90,24 @@ func main() {
 		FollowRepo: followRepo,
 		Redis: rdb,
 		JWTAuthenticator: jwtAuthenticator,
+		Logger: logger,
 	})
-	// routing
+
+	likesHandler := handlers.NewLikesHandler(handlers.LikesHandlerConfig{
+		LikesRepo: likesRepo,
+		JWTAuthenticator: jwtAuthenticator,
+		Logger: logger,
+	})
+
+	favoriteHandler := handlers.NewFavoriteHandler(handlers.FavoriteHandlerConfig{
+		FavoriteRepo: favoriteRepo,
+		Logger: logger,
+		JWTAuthenticator: jwtAuthenticator,
+	})
+	
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/login", userHandler.Authenticate)
-		// user
+		
 		r.Route("/users", func(r chi.Router) {
 			r.Post("/", userHandler.CreateUser)
 
@@ -100,9 +118,7 @@ func main() {
 				r.Delete("/{id}", userHandler.DeleteUser)
 			})
 		})
-		
 
-		// post
 		r.Route("/posts", func(r chi.Router) {
 			r.Use(jwtAuthenticator.JWTMiddleware)
 			r.Post("/", posthandler.CreatePost)
@@ -110,13 +126,26 @@ func main() {
 			r.Delete("/{id}", posthandler.DeletePost)
 		})
 
-		// follow
 		r.Route("/follows", func(r chi.Router) {
 			r.Use(jwtAuthenticator.JWTMiddleware)
 			r.Post("/", followHandler.Follow)
 			r.Get("/followers", followHandler.GetFollowers)
 			r.Get("/following", followHandler.GetFollowing)
 			r.Delete("/{id}", followHandler.Unfollow)
+		})
+
+		r.Route("/likes", func(r chi.Router) {
+			r.Use(jwtAuthenticator.JWTMiddleware)
+			r.Post("/{postId}", likesHandler.Like)
+			r.Get("/{postId}", likesHandler.GetPostLikes)
+			r.Delete("/{likesId}", likesHandler.Unlike)
+		})
+
+		r.Route("/favorites", func(r chi.Router) {
+			r.Use(jwtAuthenticator.JWTMiddleware)
+			r.Post("/{postId}", favoriteHandler.AddFavorite)
+			r.Get("/", favoriteHandler.GetFavouritePost)
+			r.Delete("/{postId}", favoriteHandler.DeleteFavorite)
 		})
 	})
 
