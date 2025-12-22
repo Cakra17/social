@@ -12,6 +12,7 @@ import (
 	"github.com/cakra17/social/internal/handlers"
 	"github.com/cakra17/social/internal/models"
 	"github.com/cakra17/social/internal/store"
+	"github.com/cakra17/social/internal/utils"
 	"github.com/cakra17/social/pkg/jwt"
 	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/maintnotifications"
@@ -31,6 +32,7 @@ var (
 	})
 
 	jwtAuthenticator = jwt.NewJWTAuthenticator("mysecret", 5 * time.Hour)
+	logger = utils.NewLogger()
 
 	rdb = redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
@@ -41,7 +43,7 @@ var (
 		},
 	})
 
-	userRepo = store.NewUserRepo(db)
+	userRepo = store.NewUserRepo(db, logger)
 
 	userHandler = handlers.NewUserHandler(handlers.UserHandlerConfig{
 		UserRepo: userRepo,

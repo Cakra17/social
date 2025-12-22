@@ -14,6 +14,7 @@ import (
 	"github.com/cakra17/social/internal/store"
 	"github.com/cakra17/social/internal/utils"
 	"github.com/cakra17/social/pkg/jwt"
+	"github.com/cakra17/social/pkg/prom"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
@@ -65,6 +66,9 @@ func main() {
 		},
 	})
 	store.TestRedis(ctx, rdb)
+	promClient := prom.NewPrometheusService()
+	promClient.Register()
+	r.Use(promClient.RequestMetricMiddleware)
 
 	userRepo := store.NewUserRepo(db, logger)
 	postRepo := store.NewPostRepo(db, logger)
@@ -106,6 +110,9 @@ func main() {
 	})
 	
 	r.Route("/api/v1", func(r chi.Router) {
+		
+		r.Get("/metrics", promClient.Handler())
+
 		r.Post("/login", userHandler.Authenticate)
 		
 		r.Route("/users", func(r chi.Router) {
