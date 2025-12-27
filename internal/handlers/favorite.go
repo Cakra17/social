@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/cakra17/social/internal/models"
@@ -52,21 +51,18 @@ func (h *FavoriteHandler) AddFavorite(w http.ResponseWriter, r *http.Request) {
 	err := h.favoriteRepo.Add(ctx, &favorite)
 	if err != nil {
 		h.logger.Error("Favorite Handler Error", "Failed add post to favorite", err.Error())
+		utils.WriteError(w, utils.CustomError{
+			Code: http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
-	res := models.Response{
+	utils.WriteJson(w, utils.CustomSuccess{
+		Code: http.StatusCreated,
 		Message: "Added to your favorite",
 		Data: favorite,
-	}
-	jsonBytes, err := json.Marshal(&res)
-	if err != nil {
-		h.logger.Error("Favorite Handler Error", "Failed to marshal response", err.Error())
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	w.Write(jsonBytes)
+	})
 } 
 
 func (h *FavoriteHandler) GetFavouritePost(w http.ResponseWriter, r *http.Request) {
@@ -83,23 +79,18 @@ func (h *FavoriteHandler) GetFavouritePost(w http.ResponseWriter, r *http.Reques
 	favorites, err := h.favoriteRepo.GetFavouritePost(ctx, userID)
 	if err != nil {
 		h.logger.Error("Favorite Handler Error", "Failed to get favorite", err.Error())
+		utils.WriteError(w, utils.CustomError{
+			Code: http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
-	res := models.Response{
+	utils.WriteJson(w, utils.CustomSuccess{
+		Code: http.StatusOK,
 		Message: "Succes to getlikes data",
 		Data: favorites,
-	}
-
-	jsonBytes, err := json.Marshal(&res)
-	if err != nil {
-		h.logger.Error("Favorite Handler Error", "Failed to marshal response", err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+	})
 }
 
 func (h *FavoriteHandler) DeleteFavorite(w http.ResponseWriter, r *http.Request) {
@@ -110,6 +101,10 @@ func (h *FavoriteHandler) DeleteFavorite(w http.ResponseWriter, r *http.Request)
 	err := h.favoriteRepo.Delete(ctx, postID)
 	if err != nil {
 		h.logger.Error("Favorite Error", "Failed to delete favorite", err.Error())
+		utils.WriteError(w, utils.CustomError{
+			Code: http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 

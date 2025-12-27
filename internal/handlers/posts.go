@@ -3,7 +3,6 @@ package handlers
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -94,21 +93,26 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	// limit file photo size
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadSize)
 	if err := r.ParseMultipartForm(MaxUploadSize); err != nil {
-		JsonError(ErrInvalidFileSize, w)
+		h.logger.Error("Post Handler Error", "Failed to retrive data", err.Error())
+		WriteError(w, ErrInvalidFileSize)
 		return
 	}	
 
 	media, header, err := r.FormFile("media")
 	if err != nil {
-		ne := CreateNewError(http.StatusBadRequest, "Failed retrieving data")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to retrive data", err.Error())
+		WriteError(w, CustomError{
+			Code: http.StatusBadRequest,
+			Message: "Failed retrieving data",
+		})
 		return
 	}
 	defer media.Close()
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !allowedType[ext] {
-		JsonError(ErrInvalidFileType, w)
+		h.logger.Error("Post Handler Error", "Failed to retrive data", "Invalid file type")
+		WriteError(w, ErrInvalidFileType)
 		return
 	}
 
@@ -117,15 +121,18 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	err = uploadPhoto(filepath, media)
 	if err != nil {
-		log.Println(err.Error())
-		ne := CreateNewError(http.StatusInternalServerError, "failed to upload image")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to Upload", err.Error())
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError,
+			Message: "failed to upload image",
+		})
 		return
 	}
 
 	id, err := uuid.NewV7()
 	if err != nil {
-		JsonError(ErrFailedToCreatePost, w)
+		h.logger.Error("Post Handler Error", "Failed to create id", err.Error())
+		WriteError(w, ErrFailedToCreatePost)
 		return
 	}
 	
@@ -140,26 +147,17 @@ func (h *PostHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	err = h.postRepo.Create(ctx, post)
 	if err != nil {
+		h.logger.Error("Post Handler Error", "Failed to create post", err.Error())
 		log.Println(err.Error())
-		JsonError(ErrFailedToCreatePost, w)
+		WriteError(w, ErrFailedToCreatePost)
 		return
 	}
 
-	res := models.Response{
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusCreated,
 		Message: "Post Created successfully",
 		Data: post,
-	}
-
-	jsonBytes, err := json.Marshal(&res)
-	if err != nil {
-    log.Println("Failed to encode to json")
-		return
-	}
-	
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	w.Write(jsonBytes)
+	})
 } 
 
 func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
@@ -169,22 +167,26 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadSize)
 	if err := r.ParseMultipartForm(MaxUploadSize); err != nil {
-		JsonError(ErrInvalidFileSize, w)
+		h.logger.Error("Post Handler Error", "Failed to retrive data", err.Error())
+		WriteError(w, ErrInvalidFileSize)
 		return
 	}	
 
 	media, header, err := r.FormFile("media")
 	if err != nil {
-		log.Println(err)
-		ne := CreateNewError(http.StatusBadRequest, "Failed retrieving data")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to retrive data", err.Error())
+		WriteError(w, CustomError{
+			Code:http.StatusBadRequest, 
+			Message: "Failed retrieving data",
+		})
 		return
 	}
 	defer media.Close()
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !allowedType[ext] {
-		JsonError(ErrInvalidFileType, w)
+		h.logger.Error("Post Handler Error", "Failed to retrive data", "Invalid file type")
+		WriteError(w, ErrInvalidFileType)
 		return
 	}
 
@@ -194,9 +196,11 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	oldFilename, err := h.postRepo.GetPhoto(ctx, id)
 	if err != nil {
-		log.Println(err)
-		ne := CreateNewError(http.StatusNotFound, "Post not found")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to get expected post", err.Error())
+		WriteError(w, CustomError{
+			Code:http.StatusNotFound, 
+			Message: "Post not found",
+		})
 		return
 	}
 
@@ -210,41 +214,38 @@ func (h *PostHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := uploadPhoto(newFilepath, media); err != nil {
-		ne := CreateNewError(http.StatusInternalServerError,"Failed upload photo")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to upload", err.Error())
+		WriteError(w, CustomError{
+			Code:http.StatusInternalServerError,
+			Message: "Failed upload photo",
+		})
 		return
 	}
 
 	err = h.postRepo.Update(ctx, post)
 	if err != nil {
 		deletePhoto(newFilepath)
-
-		log.Println(err.Error())
-		ne := CreateNewError(http.StatusInternalServerError, "Failed to update post")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to update post", err.Error())
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError,
+			Message: "Failed to update post",
+		})
 		return
 	}
 
 	if err := deletePhoto(oldFilepath); err != nil {
-		ne := CreateNewError(http.StatusInternalServerError, "Failed to update post")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to delete old photo", err.Error())
+		WriteError(w, CustomError{
+			Code:http.StatusInternalServerError,
+			Message: "Failed to update post",
+		})
     return
 	}
 
-	res := models.Response{
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusOK,
 		Message: "Post updated successfully",
-	}
-
-	jsonBytes, err := json.Marshal(res)
-	if err != nil {
-		log.Println("Failed to encode to json")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+	})
 }
 
 func (h *PostHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
@@ -254,41 +255,37 @@ func (h *PostHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 
 	filename, err := h.postRepo.GetPhoto(ctx, id)
 	if err != nil {
-		log.Println(err)
-		ne := CreateNewError(http.StatusNotFound, "Post not found")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to get expected post", err.Error())
+		WriteError(w, CustomError{
+			Code: http.StatusNotFound, 
+			Message: "Post not found",
+		})
 		return
 	}
 
 	err = h.postRepo.Delete(r.Context(), id)
 	if err != nil {
-		log.Println(err.Error())
-		ne := CreateNewError(http.StatusInternalServerError, "Failed to delete post")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to delete post", err.Error())
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError,
+			Message: "Failed to delete post",
+		})
 		return
 	}
 
 	filepath := filepath.Join(UploadDir, filename)
 
 	if err := deletePhoto(filepath); err != nil {
-		log.Println(err.Error())
-		ne := CreateNewError(http.StatusInternalServerError, "Failed to delete post")
-		JsonError(ne, w)
+		h.logger.Error("Post Handler Error", "Failed to delete photo", err.Error())
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError, 
+			Message: "Failed to delete post",
+		})
 		return
 	}
 
-	res := models.Response{
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusOK,
 		Message: "Data deleted successfully",
-	}
-
-	jsonBytes, err := json.Marshal(&res)
-	if err != nil {
-		log.Println("Failed to encode to json")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+	})
 }

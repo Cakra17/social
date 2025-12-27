@@ -68,26 +68,25 @@ func (ja *JWTAuthenticator) JWTMiddleware(next http.Handler) http.Handler {
 
 		authHeader := r.Header.Get("Authorization")
 		if !strings.Contains(authHeader, "Bearer") {
-			JsonError(ErrNoTokenProvided, w)
+			WriteError(w, ErrNoTokenProvided)
 			return
 		}
 
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenStr == "" {
-			JsonError(ErrTokenMalformed, w)
+			WriteError(w, ErrTokenMalformed)
 			return
 		}
 
 		token, err := ja.ValidateToken(tokenStr)
 		if err != nil {
-			JsonError(ErrTokenExpires, w)
+			WriteError(w, ErrTokenExpires)
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok || !token.Valid {
-			ne := CreateNewError(http.StatusUnauthorized, "Bearer token not contains user info")
-			JsonError(ne, w)
+			WriteError(w, ErrTokenNotContainsInfo)
 			return
 		}
 

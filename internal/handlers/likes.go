@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/cakra17/social/internal/models"
@@ -42,7 +41,6 @@ func (h *LikesHandler) Like(w http.ResponseWriter, r *http.Request) {
 
 	userID := claims["userId"].(string)
 	postID := r.PathValue("postId")
-	
 
 	likes := models.Likes{
 		ID: uuid.Must(uuid.NewV7()).String(),
@@ -53,11 +51,17 @@ func (h *LikesHandler) Like(w http.ResponseWriter, r *http.Request) {
 	err := h.likesRepo.Like(ctx, likes)
 	if err != nil {
 		h.logger.Error("Like Handler Error", "Failed to liked post", err.Error())
+		utils.WriteError(w, utils.CustomError{
+			Code: http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	utils.WriteJson(w, utils.CustomSuccess{
+		Code: http.StatusCreated,
+		Data: likes,
+	})
 }
 
 func (h *LikesHandler) GetPostLikes(w http.ResponseWriter, r *http.Request) {
@@ -68,23 +72,18 @@ func (h *LikesHandler) GetPostLikes(w http.ResponseWriter, r *http.Request) {
 	likes, err := h.likesRepo.GetLikes(ctx, postID)
 	if err != nil {
 		h.logger.Error("Like Handler Error", "Failed to get liked post", err.Error())
+		utils.WriteError(w, utils.CustomError{
+			Code: http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		return
 	}
 
-	res := models.Response{
+	utils.WriteJson(w, utils.CustomSuccess{
+		Code: http.StatusOK,
 		Message: "Succes to get likes data",
 		Data: likes.Users,
-	}
-
-	jsonBytes, err := json.Marshal(res)
-	if err != nil {
-		h.logger.Error("Like Handler Error", "Failed to marshal response", err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+	})
 }
 
 func (h *LikesHandler) Unlike(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +93,10 @@ func (h *LikesHandler) Unlike(w http.ResponseWriter, r *http.Request) {
 
 	err := h.likesRepo.Unlike(ctx, postID)
 	if err != nil {
+		utils.WriteError(w, utils.CustomError{
+			Code: http.StatusInternalServerError,
+			Message: err.Error(),
+		})
 		h.logger.Error("Like Handler Error", "Failed to unlike post", err.Error())
 		return
 	}

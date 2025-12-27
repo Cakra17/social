@@ -41,15 +41,15 @@ func NewUserHandler(cfg UserHandlerConfig) UserHandler {
 func(h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var payload models.RegisterPayload
 
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+	if err := utils.ParseBody(r, &payload); err != nil {
 		h.logger.Error("User Handler Error", "Failed to decode payload", err.Error())
-		JsonError(ErrPayloadMalformed, w)
+		WriteError(w, ErrPayloadMalformed)
 		return
 	}
 
 	if err := validation.Validate(&payload); err != nil {
 		h.logger.Error("User Handler Error", "Failed to validate payload", err)
-		JsonError(ErrInvalidPayload, w)
+		WriteError(w, ErrInvalidPayload)
 		return
 	}
 
@@ -58,21 +58,21 @@ func(h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	user, _ := h.userRepo.GetUserByEmail(ctx, payload.Email)
 	if user != nil {
 		h.logger.Error("User Handler Error", "Failed to create user", "Credentials already used")
-		JsonError(ErrCredentialExist, w)
+		WriteError(w, ErrCredentialExist)
 		return
 	}
 
 	id, err := uuid.NewV7()
 	if err != nil {
 		h.logger.Error("User Handler Error", "Failed to create user", "Can't generate uuid")
-		JsonError(ErrFailedToCreateUser, w)
+		WriteError(w, ErrFailedToCreateUser)
 		return
 	}
 
 	hashedPassword, err := HashPassword(payload.Password)
 	if err != nil {
 		h.logger.Error("User Handler Error", "Failed to create user", "Can't hash password")
-		JsonError(ErrFailedToCreateUser,w)
+		WriteError(w, ErrFailedToCreateUser)
 		return
 	}
 
@@ -86,38 +86,28 @@ func(h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	err = h.userRepo.CreateUser(ctx, user)
 	if err != nil {
 		h.logger.Error("User Handler Error", "Failed to create user", err.Error())
-		JsonError(ErrFailedToCreateUser, w)
+		WriteError(w, ErrFailedToCreateUser)
 		return
 	}
 
-	res := models.Response{
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusCreated,
 		Data: user,
-	}
-
-	jsonBytes, err := json.Marshal(res)
-	if err != nil {
-		h.logger.Error("User Handler Error", "Failed to marshal response", err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type","application/json")
-	w.WriteHeader(http.StatusCreated)
-	w.Write(jsonBytes)
+	})
 }
 
 func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	var payload models.LoginPayload
 
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+	if err := utils.ParseBody(r, &payload); err != nil {
 		h.logger.Error("User Handler Error", "Failed to decode payload", err.Error())
-		JsonError(ErrPayloadMalformed, w)
+		WriteError(w, ErrPayloadMalformed)
 		return
 	}
 
 	if err := validation.Validate(&payload); err != nil {
 		h.logger.Error("User Handler Error", "Failed to validate payload", err)
-		JsonError(ErrInvalidPayload, w)
+		WriteError(w, ErrInvalidPayload)
 		return
 	}
 
@@ -125,7 +115,7 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	user, err := h.userRepo.GetUserByEmail(ctx, payload.Email)
 	if err != nil {
 		h.logger.Error("User Handler Error", "Failed to login", "Account doesn't exist")
-		JsonError(ErrUserNotFound, w)
+		WriteError(w, ErrUserNotFound)
 		return
 	}
 
@@ -133,7 +123,7 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 
 	if ok := ComparePassword(payload.Password, user.Password); !ok {
 		h.logger.Error("User Handler Error", "Failed to login", "Wrong password")
-		JsonError(ErrWrongPassword, w)
+		WriteError(w, ErrWrongPassword)
 		return
 	}
 
@@ -144,28 +134,20 @@ func(h *UserHandler) Authenticate(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {	
 		h.logger.Error("User Handler Error", "Failed to generate token", err.Error())
-		ne := CreateNewError(http.StatusInternalServerError, err.Error())
-		JsonError(ne, w)
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError, 
+			Message: err.Error(),
+		})
 		return
 	}
 
-	res := models.Response{
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusOK,
 		Message: "success to login",
 		Data: models.AuthResponse{
 			AccessToken: token,
 		},
-	}
-
-	jsonBytes, err := json.Marshal(res)
-	if err != nil {
-		h.logger.Error("User Handler Error", "Failed to marshal response", err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type","application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+	})
 }
 
 func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +157,7 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	claims, ok := h.jwtAuthenticator.GetClaims(ctx)
 	if !ok {
 		h.logger.Error("User Handler Error", "Failed get claims")
-		JsonError(ErrTokenExpires, w)
+		WriteError(w, ErrTokenExpires)
 		return
 	}
 
@@ -185,7 +167,7 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		user, err = h.userRepo.GetUserById(ctx, userID)
 		if err != nil {
-			JsonError(ErrUserNotFound, w)
+			WriteError(w, ErrUserNotFound)
 			return
 		}
 		err :=h.redis.Set(ctx, userID, user, time.Minute).Err()
@@ -198,34 +180,24 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res := models.Response{
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusOK,
 		Data: user,
-	}
-
-	jsonBytes, err := json.Marshal(&res)
-	if err != nil {
-		h.logger.Error("User Handler Error", "Failed to marshal response", err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+	})
 }
 
 func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	var payload models.UpdateUserPayload
 
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+	if err := utils.ParseBody(r, &payload); err != nil {
 		h.logger.Error("User Handler Error", "Failed to decode payload", err.Error())
-		JsonError(ErrPayloadMalformed, w)
+		WriteError(w, ErrPayloadMalformed)
 		return
 	}
 
 	if err := validation.Validate(&payload); err != nil {
 		h.logger.Error("User Handler Error", "Failed to validate payload", err)
-		JsonError(ErrInvalidPayload, w)
+		WriteError(w, ErrInvalidPayload)
 		return
 	}
 
@@ -235,25 +207,17 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	err := h.userRepo.UpdateUser(ctx, &payload, id)
 	if err != nil {
 		h.logger.Error("User Handler Error", "Failed to update user", err.Error())
-		ne := CreateNewError(http.StatusInternalServerError, "Failed to update user")
-		JsonError(ne, w)
+		WriteError(w, CustomError{
+			Code :http.StatusInternalServerError, 
+			Message: "Failed to update user",
+		})
 		return
 	}	
 
-	res := models.Response{
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusOK,
 		Message: "Data Updated successfully",
-	}
-
-	jsonBytes, err := json.Marshal(res)
-	if err != nil {
-		h.logger.Error("User Handler Error", "Failed to marshal response", err.Error())
-		return
-	}
-	
-	w.Header().Set("Content-Type","application/json")
-	w.WriteHeader(http.StatusCreated)
-	w.Write(jsonBytes)
+	})
 }
 
 func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
@@ -263,23 +227,15 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	err := h.userRepo.Delete(ctx, id)
 	if err != nil {
 		h.logger.Error("User Handler Error", "Failed to delete user", err.Error())
-		ne := CreateNewError(http.StatusInternalServerError, "Failed to delete user")
-		JsonError(ne, w)
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError,
+			Message: "Failed to delete user",
+		})
 		return
 	}	
 
-	res := models.Response{
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusOK,
 		Message: "Data deleted successfully",
-	}
-
-	jsonBytes, err := json.Marshal(res)
-	if err != nil {
-		h.logger.Error("User Handler Error", "Failed to marshal response", err.Error())
-		return
-	}
-	
-	w.Header().Set("Content-Type","application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+	})
 }

@@ -8,19 +8,15 @@ import (
 
 var validate = validator.New(validator.WithRequiredStructEnabled())
 
-func Validate(data any) map[string]string {
+func Validate(data any) error {
 	err := validate.Struct(data)
 	if err != nil {
-		errMaps := make(map[string]string)
-
-		if validationErr, ok := err.(validator.ValidationErrors); ok {
-			for _, vErr := range validationErr {
-				errMaps[vErr.Field()] = fmt.Sprintf("failed on '%s' rule", vErr.Tag())
+		if validationErros, ok := err.(validator.ValidationErrors); ok {
+			for _, fieldErr := range validationErros {
+				return fmt.Errorf("%s %s", fieldErr.Field(), fieldErr.Error())
 			}
-		} else {
-			errMaps["error"] = err.Error()
 		}
-		return errMaps
+
 	}
 	return nil
 }

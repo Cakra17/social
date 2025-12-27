@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/cakra17/social/internal/models"
@@ -41,13 +39,13 @@ func NewFollowHandler(cfg FollowHandlerConfig) FollowHandler {
 func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 	var payload models.FollowPayload
 
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		JsonError(ErrPayloadMalformed, w)
+	if err := utils.ParseBody(r, &payload); err != nil {
+		WriteError(w, ErrPayloadMalformed)
 		return
 	}
 
 	if err := validation.Validate(&payload); err != nil {
-    JsonError(ErrInvalidPayload, w)
+    WriteError(w, ErrInvalidPayload)
 		return
 	}
 
@@ -55,8 +53,11 @@ func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 
 	id, err := uuid.NewV7()
 	if err != nil {
-    ne := CreateNewError(http.StatusInternalServerError, "Failed to follow user")
-    JsonError(ne, w)
+		h.logger.Error("Favorite Handler Error", "Failed to create id", err.Error())
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError,
+			Message: "Failed to follow user",
+		})
 		return
 	}
 
@@ -68,32 +69,26 @@ func (h *FollowHandler) Follow(w http.ResponseWriter, r *http.Request) {
 
 	err = h.followRepo.Follow(ctx, follow)
 	if err != nil {
-    ne := CreateNewError(http.StatusInternalServerError, "Failed to follow user")
-    JsonError(ne, w)
+		h.logger.Error("Favorite Handler Error", "Failed to follow user", err.Error())
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError,
+			Message: "Failed to follow user",
+		})
 		return
 	}
 
-	res := models.Response{
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusCreated,
 		Message: "started to follow",
-	}
-
-	jsonBytes, err := json.Marshal(&res)
-	if err != nil {
-    log.Println(err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+		Data: follow,
+	})
 }
 
 func (h *FollowHandler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims, ok := h.jwtAuthenticator.GetClaims(ctx)
 	if !ok {
-    JsonError(ErrTokenExpires, w)
+    WriteError(w, ErrTokenExpires)
 		return
 	}
 
@@ -101,32 +96,24 @@ func (h *FollowHandler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 
 	followers, err := h.followRepo.GetFollowers(ctx, userId)
 	if err != nil {
-    ne := CreateNewError(http.StatusInternalServerError, "Failed to get followers")
-    JsonError(ne,w)
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError,
+			Message: "Failed to get followers",
+		})
 		return
 	}
 
-	res := models.Response {
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusOK,
 		Data: followers,
-	}
-
-	jsonBytes, err := json.Marshal(&res)
-	if err != nil {
-    log.Println("Failed to encode to json")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+	})
 }
 
 func (h *FollowHandler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims, ok := h.jwtAuthenticator.GetClaims(ctx)
 	if !ok {
-    JsonError(ErrTokenExpires, w)
+    WriteError(w,ErrTokenExpires)
 		return
 	}
 
@@ -134,25 +121,17 @@ func (h *FollowHandler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 
 	following, err := h.followRepo.GetFollowing(ctx, userId)
 	if err != nil {
-    ne := CreateNewError(http.StatusInternalServerError, "Failed to get followers")
-    JsonError(ne,w)
+    WriteError(w, CustomError{
+			Code: http.StatusInternalServerError, 
+			Message: "Failed to get followers",
+		})
 		return
 	}
 
-	res := models.Response {
-		Success: true,
+	WriteJson(w, CustomSuccess{
+		Code: http.StatusOK,
 		Data: following,
-	}
-
-	jsonBytes, err := json.Marshal(&res)
-	if err != nil {
-    log.Println("Failed to encode to json")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(jsonBytes)
+	})
 }
 
 func (h *FollowHandler) Unfollow(w http.ResponseWriter, r *http.Request) {
@@ -161,8 +140,10 @@ func (h *FollowHandler) Unfollow(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	err := h.followRepo.Unfollow(ctx, id)
 	if err != nil {
-    ne := CreateNewError(http.StatusInternalServerError, "Failed to unfollow")
-    JsonError(ne, w)
+		WriteError(w, CustomError{
+			Code: http.StatusInternalServerError, 
+			Message: "Failed to unfollow",
+		})
 		return
 	}
 
